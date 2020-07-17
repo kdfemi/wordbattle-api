@@ -37,13 +37,18 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   handleDisconnect(client: Socket) {
-    const roomId = this.roomEntity.getUserRoom(client.id).id
+    const roomEntity = this.roomEntity.getUserRoom(client.id)
+    const roomId =roomEntity&&roomEntity.id
     if(roomId) {
       this.leaveRoom({roomId, userId: client.id} ,client);
     }
     this.logger.log(`Client disconnected: ${client.id}`);
   }
-
+  @SubscribeMessage('test')
+  handleTes( @ConnectedSocket() socket: Socket) {
+    console.log('I Called you')
+    return 'Tested'
+  }
   @SubscribeMessage('createRoom')
   createRoom(@MessageBody() gameDetails: {username: string, maxLength: number},  @ConnectedSocket() socket: Socket) {
     const roomId = Math.floor(Math.random() * 100);
@@ -60,19 +65,22 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
   @SubscribeMessage('joinRoom')
   joinGameSession(@MessageBody() body: {roomId: string, username: string},  @ConnectedSocket() socket: Socket) {
-    
     const room = this.roomEntity.findById(body.roomId);
     const userExists = !!room.users.find( user => socket.id === user.id)
     
     // eslint-disable-next-line @typescript-eslint/camelcase
     if(room && room.users.length < Max_Gamer && !userExists) {
 
-      socket.join(body.roomId);
       room.users.push({id: socket.id, userName: body.username});
       room.scores.push({score: 0, userId: socket.id});
       this.roomEntity.save(room);
-      const [pl1, pl2] = room.scores
-      this.server.to(room.id).emit('startGame', {pl1, pl2});
+      const [pl1, pl2] = room.scores;
+      const creator = room.users.find(user => user.id !== socket.id)
+      const pl1Username = {userId: creator.id, username: creator.userName}
+      const pl2Username = {userId: socket.id, username: body.username}
+      socket.join(body.roomId, () => {
+        this.server.to(room.id).emit('startGame', {pl1, pl2}, {pl1Username, pl2Username});
+      });
       return {roomId:body.roomId, canGenerateWord: false, userId: socket.id};
     } else if(room && userExists ) {
 
@@ -89,12 +97,12 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     }
   }
 
-  @SubscribeMessage('generatedWord')
+  @SubscribeMessage('generateWord')
   startGame(@MessageBody() body: {roomId: string, userId: string}) {
-    const room = this.roomEntity.findById(body.roomId);
-    if(room.creatorId !== body.userId) {
-      throw new WsException('You didn\'t start the game you can\'t generate words');
-    }
+    const room = this.roomEntity.findById(body.roomId+"");
+    // if(room.creatorId !== body.userId) {
+    //   throw new WsException('You didn\'t start the game you can\'t generate words');
+    // }
     ++room.played
     this.roomEntity.save(room);
     this.server.to(body.roomId).emit('word', this.gameService.generateGameWord())
@@ -120,25 +128,29 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   @SubscribeMessage('leave')
   leaveRoom(@MessageBody() data: {roomId: string, userId: string},  @ConnectedSocket() socket: Socket) {
     const room = this.roomEntity.findById(data.roomId);
-    if(room.users.length === 1)  {
+ 
+    if(room&&room.users.length === 1)  {
       socket.leave(data.roomId);
       return true;
-    } else {
+    } else if(room&&room.users.length > 1) {
       const scores = room.scores;
       const [pl1, pl2] =  scores;
       const winner = pl1.score > pl2.score ? pl1 : pl1.score === pl2.score ? true : pl2;
       this.server.in(data.roomId).clients((error, socketIds) => {
         if (error) throw error;
         if(room.creatorId === data.userId) {
-          this.server.to(data.roomId).emit('close',`creator Closed game`, winner);
+          this.server.to(data.roomId).emit('over',`creator Closed game`, winner);
           socketIds.forEach(socketId => this.server.sockets.sockets[socketId].leave(data.roomId));
         } else {
           socket.leave(data.roomId, () => {
             const leftUser = room.users.find(user => user.id === data.userId)
-            this.server.to(data.roomId).emit('left',`user ${leftUser.userName} left`, winner);
+            this.server.to(data.roomId).emit('over',`user ${leftUser&&leftUser.userName} left`, winner);
           });
         }
       });
+    } else {
+      socket.leave(data.roomId);
     }
+    return true;
   }
 }

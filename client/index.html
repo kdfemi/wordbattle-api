@@ -13,6 +13,11 @@
         socket.emit('createRoom', 'kdfemi', roomId=> {
           console.log(roomId + "ROOM ID")
         })
+
+        socket.emit('test', 'kdfemi', roomId=> {
+          console.log(roomId + "test log")
+        })
+
         socket.on('jesus', roomId=> {
           console.log("Jesus called")
         })
