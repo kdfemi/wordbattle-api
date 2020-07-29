@@ -31,6 +31,7 @@ export interface Room {
     gameLength: number;
     scores: {userId: string, score: number}[];
     played: number;
+    currentWord: string;
 }
 
 export interface User {
