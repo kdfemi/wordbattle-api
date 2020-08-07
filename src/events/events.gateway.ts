@@ -9,23 +9,33 @@ import {
   OnGatewayDisconnect,
   WsException,
 } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
+import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
-// eslint-disable-next-line @typescript-eslint/camelcase
-import {RoomEntity, Max_Gamer} from '../db';
+
+import { Server, Socket } from 'socket.io';
+
 import { GameService } from './game.service';
 import {
   USER_EXIST_IN_GROUP, USER_EXIST_IN_GROUP_CODE, MAX_USER_ALLOWED, MAX_USER_ALLOWED_CODE,
   USERNAME_EXIST_IN_GROUP, USERNAME_EXIST_IN_GROUP_CODE, ROOM_NOT_FOUND, ROOM_NOT_FOUND_CODE, USER_FORBIDDEN,
-  USER_FORBIDDEN_CODE, UNKNOWN_ERROR, UNKNOWN_ERROR_CODE
+  USER_FORBIDDEN_CODE, UNKNOWN_ERROR, UNKNOWN_ERROR_CODE, INVALID_WORD, INVALID_WORD_CODE
 } from '../constant';
+
+import { RoomRepository } from '../data/room/Room.repository';
+import { UserRepository } from '../data/user/user.repository';
+
+import { Room } from '../data/room/Room.entity';
+import { User } from '../data/user/user.entity';
+import { Score } from '../data/score/score.entity';
 
 @WebSocketGateway()
 export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect  {
  
   constructor(
     private readonly gameService: GameService,
-    private readonly roomEntity:RoomEntity
+    private readonly roomRepository: RoomRepository,
+    private readonly userRepository: UserRepository,
+    private readonly configService: ConfigService
   ) {}
 
   @WebSocketServer()
@@ -34,18 +44,17 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   private logger: Logger = new Logger('AppGateway');
   
   afterInit() {
-    this.logger.log('Init');
+    this.logger.log('WebSocketServer Init');
   }
   
-  handleConnection(client: Socket, ...args: any[]) {
+  handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);
   }
 
-  handleDisconnect(client: Socket) {
-    const roomEntity = this.roomEntity.getUserRoom(client.id)
-    const roomId =roomEntity&&roomEntity.id
-    if(roomId) {
-      this.leaveRoom({roomId, userId: client.id} ,client);
+  async handleDisconnect(client: Socket) {
+    const user = await this.userRepository.findOne({where: {socketId: client.id}});
+    if(user) {
+      this.leaveRoom({roomId: user.roomId, userId: client.id} ,client);
     }
     this.logger.log(`Client disconnected: ${client.id}`);
   }
@@ -58,23 +67,36 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   @SubscribeMessage('createRoom')
-  createRoom(@MessageBody() gameDetails: {username: string, maxLength: number},  @ConnectedSocket() socket: Socket) {
+  async createRoom(@MessageBody() gameDetails: {username: string, maxLength: number},  @ConnectedSocket() socket: Socket) {
     try {
 
-      const roomId = Math.floor(Math.random() * 100);
-      this.roomEntity.rooms.push({
-        id: roomId+"",
-      creatorId: socket.id, users:  [{id: socket.id, userName: gameDetails.username}],
-      gameLength: gameDetails.maxLength,
-      scores: [{score: 0, userId: socket.id}],
-      played: 0,
-      currentWord: ''
-      });
-      socket.join(""+roomId);
+      const user = new User()
+      user.id = socket.id;
+      user.username = gameDetails.username.trim();
+      
+      const score = new Score();
+      score.user = user;
+      
+      
+      const room = new Room();
+      room.users = [user];
+      room.scores = [score];
+      room.creatorId = socket.id;
+      room.gameLength = gameDetails.maxLength;
+      
+      score.room = room;
+      
+
+      const createdRoom = await room.save();
+      
+      const roomId = createdRoom.id;
+      socket.join(roomId);
+
       return {roomId, canGenerateWord: true, userId: socket.id};
     } catch (err) {
+      const log = new Logger('CREATE ROOM')
+      log.error(err);
       if(!err.error) {
-        Logger.log(err);
         throw new WsException({message: UNKNOWN_ERROR, status: UNKNOWN_ERROR_CODE});
       }
       throw new WsException(err.error)
@@ -82,21 +104,27 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   @SubscribeMessage('joinRoom')
-  joinGameSession(@MessageBody() body: {roomId: string, username: string},  @ConnectedSocket() socket: Socket) {
+  async joinGameSession(@MessageBody() body: {roomId: string, username: string},  @ConnectedSocket() socket: Socket) {
     try {
-      const room = this.roomEntity.findById(body.roomId);
+      const room = await this.roomRepository.findOne(body.roomId.trim());
       const userExists = room&&!!room.users.find( user => socket.id === user.id)
-      const userNameExists = room&&!!room.users.find( user => body.username.trim().toLowerCase() === user.userName.trim().toLowerCase());
-      
-      // eslint-disable-next-line @typescript-eslint/camelcase
-      if(room && room.users.length < Max_Gamer && !userExists && !userNameExists) {
-  
-        room.users.push({id: socket.id, userName: body.username});
-        room.scores.push({score: 0, userId: socket.id});
-        this.roomEntity.save(room);
-        const [pl1, pl2] = room.scores;
+      const userNameExists = room&&!!room.users.find( user => body.username.trim().toLowerCase() === user.username.trim().toLowerCase());
+      const maxGamers = this.configService.get<number>('Max_Gamer');
+
+      if(room && room.users.length < maxGamers && !userExists && !userNameExists) {
+        const user = new User()
+        user.id = socket.id;
+        user.username = body.username.trim();
+
+        const score = new Score();
+        score.user = user;
+        
+        room.users.push(user);
+        room.scores.push(score);
+        const updatedRoom = await room.save();
+        const [pl1, pl2] = updatedRoom.scores;
         const creator = room.users.find(user => user.id !== socket.id)
-        const pl1Username = {userId: creator.id, username: creator.userName}
+        const pl1Username = {userId: creator.id, username: creator.username}
         const pl2Username = {userId: socket.id, username: body.username}
         socket.join(body.roomId, () => {
           this.server.to(room.id).emit('startGame', {pl1, pl2}, {pl1Username, pl2Username});
@@ -122,8 +150,9 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         throw new WsException({message: UNKNOWN_ERROR, status: UNKNOWN_ERROR_CODE});
       }
     } catch(err) {
+      const log = new Logger('JOIN ROOM')
+      log.error(err);
       if(!err.error) {
-        Logger.log(err);
         throw new WsException({message: UNKNOWN_ERROR, status: UNKNOWN_ERROR_CODE});
       }
       throw new WsException(err.error)
@@ -131,13 +160,16 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   @SubscribeMessage('rejoinRoom')
-  reJoinGameSession(@MessageBody() body: {roomId: string, userId: string},  @ConnectedSocket() socket: Socket) {
+  async reJoinGameSession(@MessageBody() body: {roomId: string, userId: string},  @ConnectedSocket() socket: Socket) {
     try {
-      const room = this.roomEntity.findById(body.roomId);
-      const userExists = room&&!!room.users.find( user => body.userId === user.id);
+
+      const room = await this.roomRepository.findOne(body.roomId);
+      const user = room&&room.users.find( user => body.userId === user.id);
+      const userExists = room&&!!user;
       
-      // eslint-disable-next-line @typescript-eslint/camelcase
       if(room  && userExists) {
+        user.socketId = socket.id;
+        await user.save();
         socket.join(body.roomId, () => {
           socket.to(room.id).emit('rejoined');
         });
@@ -150,8 +182,9 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         throw new WsException({message: ROOM_NOT_FOUND, status: ROOM_NOT_FOUND_CODE});
       }
     } catch(err) {
+      const log = new Logger('REJOIN ROOM')
+      log.error(err);
       if(!err.error) {
-        Logger.log(err);
         throw new WsException({message: UNKNOWN_ERROR, status: UNKNOWN_ERROR_CODE});
       }
       throw new WsException(err.error)
@@ -160,9 +193,9 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   @SubscribeMessage('generateWord')
-  startGame(@MessageBody() body: {roomId: string, userId: string}) {
+  async startGame(@MessageBody() body: {roomId: string, userId: string}) {
     try {
-      const room = this.roomEntity.findById(body.roomId+"");
+      const room = await this.roomRepository.findOne(body.roomId);
       if(room.creatorId !== body.userId || room.currentWord !== '') {
         throw new WsException({message: USER_FORBIDDEN, status: USER_FORBIDDEN_CODE});
       } else {
@@ -171,12 +204,13 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         room.currentWord = generatedWord.word;
         const played = room.played;
         const gameLength = room.gameLength;
-        this.roomEntity.save(room);
+        await room.save();
         this.server.to(body.roomId).emit('word', {...generatedWord, played, gameLength});
       }
     } catch(err) {
+      const log = new Logger('GENERATE WORD')
+      log.error(err);
       if(!err.error) {
-        Logger.log(err);
         throw new WsException({message: UNKNOWN_ERROR, status: UNKNOWN_ERROR_CODE});
       }
       throw new WsException(err.error)
@@ -184,39 +218,43 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   @SubscribeMessage('submit')
-  chooseWinner(@MessageBody() data: {roomId: string, secs:number, userId: string, word: string}) {
+  async chooseWinner(@MessageBody() data: {roomId: string, secs:number, userId: string, word: string}) {
     try {
-      const room = this.roomEntity.findById(data.roomId+"");
+      const room = await this.roomRepository.findOne(data.roomId);
       const gamerScores = room.scores;
+
       const submittedPlayerScoreIndex = gamerScores.findIndex(pl => pl.userId ===  data.userId);
       ++gamerScores[submittedPlayerScoreIndex].score;
-      if((room.gameLength > room.played) && (data.word === room.currentWord)) {
+
+      if((room.gameLength > room.played) && (data.word.trim().toLowerCase() === room.currentWord.trim().toLowerCase())) {
   
         const [pl1, pl2] = room.scores
         ++room.played
         const generatedWord = this.gameService.generateGameWord()
         room.currentWord = generatedWord.word;
-        this.roomEntity.save(room);
+        await room.save();
         const played = room.played;
         const gameLength = room.gameLength;
         this.server.to(data.roomId).emit('word', {...generatedWord, played, gameLength})
         this.server.to(data.roomId).emit('score', {pl1, pl2})
+      } else if(data.word.trim().toLowerCase() !== room.currentWord.trim().toLowerCase()) {
+        throw new WsException({message: INVALID_WORD, status: INVALID_WORD_CODE})
       } else {
         const scores = room.scores;
         const [pl1, pl2] =  scores;
         const winner = pl1.score > pl2.score ? pl1 : pl1.score === pl2.score ? {userId: 'tie', score: pl2.score} : pl2;
         let winnerUsername = '';
         if(pl1.score !== pl2.score) {
-          winnerUsername = room.users.find(user => user.id === (winner as {userId: string;
-            score: number;}).userId).userName;
-            console.log(winnerUsername);
+          winnerUsername = room.users.find(user => user.id === winner.userId).username;
         }
         this.server.to(data.roomId).emit('announceWinner', winner, winnerUsername);
+        room.remove();
       }
 
     } catch(err) {
+      const log = new Logger('SUBMIT WORD')
+      log.error(err);
       if(!err.error) {
-        Logger.log(err);
         throw new WsException({message: UNKNOWN_ERROR, status: UNKNOWN_ERROR_CODE});
       }
       throw new WsException(err.error)
@@ -224,14 +262,11 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   @SubscribeMessage('leave')
-  leaveRoom(@MessageBody() data: {roomId: string, userId: string},  @ConnectedSocket() socket: Socket) {
+  async leaveRoom(@MessageBody() data: {roomId: string, userId: string},  @ConnectedSocket() socket: Socket) {
     try {
-      const room = this.roomEntity.findById(data.roomId+"");
-      const roomIndex = this.roomEntity.rooms.findIndex(rm => room.id === rm.id);
-   
+      const room = await this.roomRepository.findOne(data.roomId);
       if(room&&room.users.length === 1)  {
         socket.leave(data.roomId);
-        return true;
       } else if(room&&room.users.length > 1) {
         const scores = room.scores;
         const [pl1, pl2] =  scores;
@@ -239,28 +274,69 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         let winnerUsername = '';
         if(pl1.score !== pl2.score) {
           winnerUsername = room.users.find(user => user.id === (winner as {userId: string;
-            score: number;}).userId).userName;
+            score: number;}).userId).username;
         }
         this.server.in(data.roomId).clients((error, socketIds) => {
           if (error) throw error;
+          let message = null;
           if(room.creatorId === data.userId) {
-            this.server.to(data.roomId).emit('over',`creator Closed game`, winner, winnerUsername);
-            socketIds.forEach(socketId => this.server.sockets.sockets[socketId].leave(data.roomId));
+            message = 'over',`creator Closed game`;
           } else {
-            socket.leave(data.roomId, () => {
-              const leftUser = room.users.find(user => user.id === data.userId)
-              this.server.to(data.roomId).emit('over',`user ${leftUser&&leftUser.userName} left`, winner, winnerUsername);
-            });
+            const leftUser = room.users.find(user => user.id === data.userId);
+            message = `user ${leftUser&&leftUser.username} left`;
           }
+          this.server.to(data.roomId).emit('over', message, winner, winnerUsername);
+          socketIds.forEach(socketId => this.server.sockets.sockets[socketId].leave(data.roomId));
         });
       } else {
         socket.leave(data.roomId);
       }
-      this.roomEntity.rooms.splice(roomIndex, 1);
+      room.remove();
       return true;
     } catch(err) {
+      const log = new Logger('LEAVE ROOM')
+      log.error(err);
       if(!err.error) {
-        Logger.log(err);
+        throw new WsException({message: UNKNOWN_ERROR, status: UNKNOWN_ERROR_CODE});
+      }
+      throw new WsException(err.error)
+    }
+  }
+
+  @SubscribeMessage('cancel')
+  async cancelGame(@MessageBody() data: {roomId: string, userId: string},  @ConnectedSocket() socket: Socket) {
+    try {
+      const room = await this.roomRepository.findOne(data.roomId);
+      if(room) {
+        const scores = room.scores;
+        const [pl1, pl2] =  scores;
+        const winner = pl1.score > pl2.score ? pl1 : pl1.score === pl2.score ? {userId: 'tie', score: pl2.score} : pl2;
+        let winnerUsername = '';
+        if(pl1.score !== pl2.score) {
+          winnerUsername = room.users.find(user => user.id === (winner as {userId: string;
+            score: number;}).userId).username;
+        }
+        this.server.in(data.roomId).clients((error, socketIds) => {
+          if (error) throw error;
+          let message = null;
+          if(room.creatorId === data.userId) {
+            message = `creator Closed game`;
+          } else {
+            const leftUser = room.users.find(user => user.id === data.userId);
+            message = `user ${leftUser&&leftUser.username} left`;
+          }
+          this.server.to(data.roomId).emit('over', message, winner, winnerUsername, data.userId);
+          socketIds.forEach(socketId => this.server.sockets.sockets[socketId].leave(data.roomId));
+        });
+      } else {
+        socket.leave(data.roomId);
+      }
+      room.remove();
+      return true;
+    } catch(err) {
+      const log = new Logger('LEAVE ROOM')
+      log.error(err);
+      if(!err.error) {
         throw new WsException({message: UNKNOWN_ERROR, status: UNKNOWN_ERROR_CODE});
       }
       throw new WsException(err.error)
