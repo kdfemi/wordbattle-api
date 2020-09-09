@@ -12,13 +12,14 @@ let GameService = class GameService {
     constructor() {
         this.alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'];
         this.Minimum_Generated = 3;
-        this.filteredWords = words_1.words.filter((word) => word.length <= 6);
+        this.filteredWords = words_1.words.filter((word) => word.length >= 2 && word.length <= 6);
     }
     generateRandomNumber(min, max) {
         return Math.floor(Math.random() * (max - min + 1)) + min;
     }
     generateWord() {
-        return this.filteredWords[this.generateRandomNumber(0, this.filteredWords.length)];
+        const suggestedWordId = this.generateRandomNumber(0, this.filteredWords.length);
+        return this.filteredWords[suggestedWordId];
     }
     shuffleArray(array) {
         for (let i = array.length - 1; i > 0; i--) {
@@ -27,10 +28,10 @@ let GameService = class GameService {
         }
         return array;
     }
-    generateGameWord() {
+    async generateGameWord() {
         const word = this.generateWord();
         if (typeof word === 'undefined' || !word) {
-            return this.generateGameWord();
+            return await this.generateGameWord();
         }
         const fillingLetter = word.split('');
         let scrambledWord = [];

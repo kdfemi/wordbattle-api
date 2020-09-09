@@ -17,6 +17,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config'
         synchronize: (configService.get('PRODUCTION') !== 'true'),
         // logging: true,
         // trace: true,
+        cache: true
       }),
       inject: [ConfigService],
   }),

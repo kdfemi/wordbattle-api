@@ -1258,11 +1258,11 @@
         "signature": "5da61a50104ace8da85aed7e4fbf1258b34d8f6b6b5058b42cc4bfe257e86ba8"
       },
       "c:/users/neptunedevelop2/desktop/vscode-workspace/wordbattle-api/src/words.ts": {
-        "version": "f04d9c35ff56602699bae32a9d56966943deab76f17fd8c2f9305504b20d3534",
+        "version": "c10f99fa09773d184fe13f8394d7b8287d3fb1924213af32857e88201c9bdbc5",
         "signature": "357281f1737ca7288de7498396781a69adfbe403d4d7817b3ba298dbcda626cc"
       },
       "c:/users/neptunedevelop2/desktop/vscode-workspace/wordbattle-api/src/events/game.service.ts": {
-        "version": "f24e6869cb87d724a9d469d946c8484bed56e29095261f021cef6ccbf52db733",
+        "version": "44064524665cc702907f5c8917da69d552fedaaea73511390cc63e34ecd7012e",
         "signature": "f7430d346145d74aac3b939afdc651346a136c2c1bf33f0eb610a2651572223a"
       },
       "c:/users/neptunedevelop2/desktop/vscode-workspace/wordbattle-api/src/constant.ts": {
@@ -2298,7 +2298,7 @@
         "signature": "a1b9a6c641d7b78372e585e74a755022f68aeb7771be0cd33386864dbe48a15f"
       },
       "c:/users/neptunedevelop2/desktop/vscode-workspace/wordbattle-api/src/events/events.gateway.ts": {
-        "version": "43318181faab01dab08f6c64752abcccddf326143aeb6b1be2c1114f3bd7f769",
+        "version": "b7926048f3a57d51c3054dc3e9636abb30ecf5b025185ddb0a515bef3a3d0842",
         "signature": "b99c4f72d64429ca05c882f4d43f92dcbceda2da637b1431c873f1ef5e879c1c"
       },
       "c:/users/neptunedevelop2/desktop/vscode-workspace/wordbattle-api/node_modules/@nestjs/typeorm/dist/interfaces/entity-class-or-schema.type.d.ts": {
@@ -2346,7 +2346,7 @@
         "signature": "c62359a1382a7da70c8e0153ce3c44c0157d2dea671125d1cba9fc7184dec308"
       },
       "c:/users/neptunedevelop2/desktop/vscode-workspace/wordbattle-api/src/app.module.ts": {
-        "version": "11c5560319c34d7ba4551fcfb197e554078a36f5b6222c87a75448bd095a2798",
+        "version": "2db1918742b18e14435e2a9fca0b675b187adfce60c9d2b35070047a1f3dbd4e",
         "signature": "9fc7f7b6ad854404973b8cba8e6d883f758237991968e9a3965d716d46f1da88"
       },
       "c:/users/neptunedevelop2/desktop/vscode-workspace/wordbattle-api/node_modules/@nestjs/core/adapters/http-adapter.d.ts": {

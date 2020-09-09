@@ -25,6 +25,7 @@ AppModule = __decorate([
                     database: configService.get('DB'),
                     entities: [__dirname + '/**/*.entity{.ts,.js}'],
                     synchronize: (configService.get('PRODUCTION') !== 'true'),
+                    cache: true
                 }),
                 inject: [config_1.ConfigService],
             }),

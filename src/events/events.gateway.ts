@@ -28,7 +28,10 @@ import { Room } from '../data/room/Room.entity';
 import { User } from '../data/user/user.entity';
 import { Score } from '../data/score/score.entity';
 
-@WebSocketGateway()
+@WebSocketGateway({
+  pingInterval: 20000,
+  pingTimeout: 5000,
+})
 export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect  {
  
   constructor(
@@ -200,7 +203,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         throw new WsException({message: USER_FORBIDDEN, status: USER_FORBIDDEN_CODE});
       } else {
         ++room.played;
-        const generatedWord = this.gameService.generateGameWord()
+        const generatedWord = await this.gameService.generateGameWord()
         room.currentWord = generatedWord.word;
         const played = room.played;
         const gameLength = room.gameLength;
@@ -230,7 +233,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   
         const [pl1, pl2] = room.scores
         ++room.played
-        const generatedWord = this.gameService.generateGameWord()
+        const generatedWord = await this.gameService.generateGameWord()
         room.currentWord = generatedWord.word;
         await room.save();
         const played = room.played;

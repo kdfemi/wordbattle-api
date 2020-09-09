@@ -162,7 +162,7 @@ let EventsGateway = class EventsGateway {
             }
             else {
                 ++room.played;
-                const generatedWord = this.gameService.generateGameWord();
+                const generatedWord = await this.gameService.generateGameWord();
                 room.currentWord = generatedWord.word;
                 const played = room.played;
                 const gameLength = room.gameLength;
@@ -188,7 +188,7 @@ let EventsGateway = class EventsGateway {
             if ((room.gameLength > room.played) && (data.word.trim().toLowerCase() === room.currentWord.trim().toLowerCase())) {
                 const [pl1, pl2] = room.scores;
                 ++room.played;
-                const generatedWord = this.gameService.generateGameWord();
+                const generatedWord = await this.gameService.generateGameWord();
                 room.currentWord = generatedWord.word;
                 await room.save();
                 const played = room.played;
@@ -367,7 +367,10 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], EventsGateway.prototype, "cancelGame", null);
 EventsGateway = __decorate([
-    websockets_1.WebSocketGateway(),
+    websockets_1.WebSocketGateway({
+        pingInterval: 20000,
+        pingTimeout: 5000,
+    }),
     __metadata("design:paramtypes", [game_service_1.GameService,
         Room_repository_1.RoomRepository,
         user_repository_1.UserRepository,

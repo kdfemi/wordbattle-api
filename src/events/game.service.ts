@@ -6,14 +6,18 @@ export class GameService {
   private readonly alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'];
   // tslint:disable-next-line: variable-name
   private readonly Minimum_Generated = 3;
-  private readonly filteredWords = words.filter((word) => word.length <= 6);
+  private readonly filteredWords = words.filter((word) => word.length >= 2  && word.length <= 6);
+
+
 
   private generateRandomNumber (min: number, max: number) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
   private generateWord () {
-    return  this.filteredWords[this.generateRandomNumber(0, this.filteredWords.length)];
+
+    const suggestedWordId = this.generateRandomNumber(0, this.filteredWords.length);
+    return  this.filteredWords[suggestedWordId];
   }
 
   private shuffleArray(array: any[]) {
@@ -24,10 +28,10 @@ export class GameService {
     return array;
   }
 
-  generateGameWord() {
+  async generateGameWord() {
       const word = this.generateWord();
       if (typeof word === 'undefined' || !word) {
-        return this.generateGameWord();
+        return await this.generateGameWord();
       }
 
       const fillingLetter: string[] = word.split('');
