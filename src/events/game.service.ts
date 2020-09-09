@@ -6,7 +6,7 @@ export class GameService {
   private readonly alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'];
   // tslint:disable-next-line: variable-name
   private readonly Minimum_Generated = 3;
-  private readonly filteredWords = words.filter((word) => word.length >= 2  && word.length <= 6);
+  private readonly filteredWords = words.filter((word) => word.length > 2  && word.length <= 6);
 
 
 
