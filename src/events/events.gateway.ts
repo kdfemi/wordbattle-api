@@ -10,7 +10,7 @@ import {
   WsException,
 } from '@nestjs/websockets';
 import { ConfigService } from '@nestjs/config';
-import { Logger } from '@nestjs/common';
+import { Logger, BeforeApplicationShutdown } from '@nestjs/common';
 
 import { Server, Socket } from 'socket.io';
 
@@ -28,11 +28,8 @@ import { Room } from '../data/room/Room.entity';
 import { User } from '../data/user/user.entity';
 import { Score } from '../data/score/score.entity';
 
-@WebSocketGateway({
-  pingInterval: 20000,
-  pingTimeout: 5000,
-})
-export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect  {
+@WebSocketGateway({})
+export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, BeforeApplicationShutdown    {
  
   constructor(
     private readonly gameService: GameService,
@@ -49,7 +46,11 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   afterInit() {
     this.logger.log('WebSocketServer Init');
   }
-  
+
+  beforeApplicationShutdown(signal) {
+    console.log(signal, 'beforeApplicationShutdown'); // e.g. "SIGINT"
+    this.server.close();
+  }
   handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);
   }
