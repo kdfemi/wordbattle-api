@@ -18,7 +18,7 @@ import { GameService } from './game.service';
 import {
   USER_EXIST_IN_GROUP, USER_EXIST_IN_GROUP_CODE, MAX_USER_ALLOWED, MAX_USER_ALLOWED_CODE,
   USERNAME_EXIST_IN_GROUP, USERNAME_EXIST_IN_GROUP_CODE, ROOM_NOT_FOUND, ROOM_NOT_FOUND_CODE, USER_FORBIDDEN,
-  USER_FORBIDDEN_CODE, UNKNOWN_ERROR, UNKNOWN_ERROR_CODE, INVALID_WORD, INVALID_WORD_CODE
+  USER_FORBIDDEN_CODE, UNKNOWN_ERROR, UNKNOWN_ERROR_CODE, INVALID_WORD, INVALID_WORD_CODE, FATAL_ERROR, FATAL_ERROR_CODE, BEATEN_TO_WORD_CODE, BEATEN_TO_WORD
 } from '../constant';
 
 import { RoomRepository } from '../data/room/Room.repository';
@@ -222,7 +222,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   @SubscribeMessage('submit')
-  async chooseWinner(@MessageBody() data: {roomId: string, secs:number, userId: string, word: string}) {
+  async chooseWinner(@MessageBody() data: {roomId: string, secs:number, userId: string, word: string, round: number}) {
     try {
       const room = await this.roomRepository.findOne(data.roomId);
       const gamerScores = room.scores;
@@ -242,7 +242,10 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         this.server.to(data.roomId).emit('word', {...generatedWord, played, gameLength})
         this.server.to(data.roomId).emit('score', {pl1, pl2})
       } else if(data.word.trim().toLowerCase() !== room.currentWord.trim().toLowerCase()) {
-        throw new WsException({message: INVALID_WORD, status: INVALID_WORD_CODE})
+        if(data.round === room.played) {
+          throw new WsException({message: INVALID_WORD, status: INVALID_WORD_CODE})
+        }
+        throw new WsException({message: BEATEN_TO_WORD, status: BEATEN_TO_WORD_CODE})
       } else {
         const scores = room.scores;
         const [pl1, pl2] =  scores;
@@ -346,4 +349,16 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       throw new WsException(err.error)
     }
   }
+
+  @SubscribeMessage('fatalError') 
+  async fatalErrorHandler(@MessageBody() data: {roomId: string, userId: string}) {
+    const room = await this.roomRepository.findOne(data.roomId);
+    this.roomRepository.delete(room.id);
+    this.server.in(data.roomId).clients((error, socketIds) => {
+      this.server.to(data.roomId).emit('fatalError', {message: FATAL_ERROR, status: FATAL_ERROR_CODE});
+      socketIds.forEach(socketId => this.server.sockets.sockets[socketId].leave(data.roomId));
+    });
+
+  }
+  
 }
