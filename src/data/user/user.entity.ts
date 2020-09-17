@@ -1,9 +1,10 @@
-import { Entity, PrimaryColumn, Column, BaseEntity, ManyToOne, OneToOne, BeforeInsert } from 'typeorm';
+import { Entity, PrimaryColumn, Column, ManyToOne, OneToOne, BeforeInsert } from 'typeorm';
+import { SuperEntity } from '../SuperEntity';
 import { Room } from '../room/Room.entity';
 import { Score } from '../score/score.entity';
 
 @Entity()
-export class User extends BaseEntity{
+export class User extends SuperEntity{
 
     @PrimaryColumn()
     id: string;

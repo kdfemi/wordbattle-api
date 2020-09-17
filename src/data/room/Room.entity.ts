@@ -1,11 +1,12 @@
-import { Entity, Column, PrimaryColumn, BaseEntity, OneToMany, BeforeInsert } from 'typeorm';
+import { Entity, Column, PrimaryColumn, OneToMany, BeforeInsert } from 'typeorm';
 import { User } from '../user/user.entity';
 import { Score } from '../score/score.entity';
 import { Logger } from '@nestjs/common';
+import { SuperEntity } from '../SuperEntity';
 
 
 @Entity()
-export class Room extends BaseEntity{
+export class Room extends SuperEntity{
   @PrimaryColumn({length: 6})
   id: string;
 
@@ -26,6 +27,8 @@ export class Room extends BaseEntity{
 
   @Column({default: ''})
   currentWord: string;
+
+
 
   @BeforeInsert()
   generateOTP() {           

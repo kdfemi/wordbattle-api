@@ -1,9 +1,10 @@
-import { Entity, Column, BaseEntity, ManyToOne, PrimaryGeneratedColumn, OneToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, ManyToOne, PrimaryGeneratedColumn, OneToOne, JoinColumn } from 'typeorm';
 import { Room } from '../room/Room.entity';
+import { SuperEntity } from '../SuperEntity';
 import { User } from '../user/user.entity';
 
 @Entity()
-export class Score extends BaseEntity {
+export class Score extends SuperEntity {
 
     @PrimaryGeneratedColumn()
     id: string
