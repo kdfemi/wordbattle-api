@@ -99,8 +99,8 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       return {roomId, canGenerateWord: true, userId: socket.id};
     } catch (err) {
       const log = new Logger('CREATE ROOM')
-      log.error(err);
       if(!err.error) {
+        log.error(err);
         throw new WsException({message: UNKNOWN_ERROR, status: UNKNOWN_ERROR_CODE});
       }
       throw new WsException(err.error)
@@ -155,8 +155,8 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       }
     } catch(err) {
       const log = new Logger('JOIN ROOM')
-      log.error(err);
       if(!err.error) {
+        log.error(err);
         throw new WsException({message: UNKNOWN_ERROR, status: UNKNOWN_ERROR_CODE});
       }
       throw new WsException(err.error)
@@ -187,8 +187,8 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       }
     } catch(err) {
       const log = new Logger('REJOIN ROOM')
-      log.error(err);
       if(!err.error) {
+        log.error(err);
         throw new WsException({message: UNKNOWN_ERROR, status: UNKNOWN_ERROR_CODE});
       }
       throw new WsException(err.error)
@@ -203,18 +203,18 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       if(room.creatorId !== body.userId || room.currentWord !== '') {
         throw new WsException({message: USER_FORBIDDEN, status: USER_FORBIDDEN_CODE});
       } else {
-        ++room.played;
+        // ++room.played;
         const generatedWord = await this.gameService.generateGameWord()
         room.currentWord = generatedWord.word;
-        const played = room.played;
+        const played = room.played + 1;
         const gameLength = room.gameLength;
         await room.save();
         this.server.to(body.roomId).emit('word', {...generatedWord, played, gameLength});
       }
     } catch(err) {
       const log = new Logger('GENERATE WORD')
-      log.error(err);
       if(!err.error) {
+        log.error(err);
         throw new WsException({message: UNKNOWN_ERROR, status: UNKNOWN_ERROR_CODE});
       }
       throw new WsException(err.error)
@@ -224,44 +224,51 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   @SubscribeMessage('submit')
   async chooseWinner(@MessageBody() data: {roomId: string, secs:number, userId: string, word: string, round: number}) {
     try {
+      // Ps: room played start count from Zero
       const room = await this.roomRepository.findOne(data.roomId);
-      const gamerScores = room.scores;
-
-      const submittedPlayerScoreIndex = gamerScores.findIndex(pl => pl.userId ===  data.userId);
-      ++gamerScores[submittedPlayerScoreIndex].score;
-
-      if((room.gameLength > room.played) && (data.word.trim().toLowerCase() === room.currentWord.trim().toLowerCase())) {
+      if(room) {
+        const gamerScores = room.scores;
+          if(data.word.trim().toLowerCase() === room.currentWord.trim().toLowerCase()) {
+            const submittedPlayerScoreIndex = gamerScores.findIndex(pl => pl.userId ===  data.userId);
+            ++gamerScores[submittedPlayerScoreIndex].score;
+            const [pl1, pl2] = room.scores
+            const generatedWord = await this.gameService.generateGameWord()
+            room.currentWord = generatedWord.word;
   
-        const [pl1, pl2] = room.scores
-        ++room.played
-        const generatedWord = await this.gameService.generateGameWord()
-        room.currentWord = generatedWord.word;
-        await room.save();
-        const played = room.played;
-        const gameLength = room.gameLength;
-        this.server.to(data.roomId).emit('word', {...generatedWord, played, gameLength})
-        this.server.to(data.roomId).emit('score', {pl1, pl2})
-      } else if(data.word.trim().toLowerCase() !== room.currentWord.trim().toLowerCase()) {
-        if(data.round === room.played) {
-          throw new WsException({message: INVALID_WORD, status: INVALID_WORD_CODE})
-        }
-        throw new WsException({message: BEATEN_TO_WORD, status: BEATEN_TO_WORD_CODE})
-      } else {
-        const scores = room.scores;
-        const [pl1, pl2] =  scores;
-        const winner = pl1.score > pl2.score ? pl1 : pl1.score === pl2.score ? {userId: 'tie', score: pl2.score} : pl2;
-        let winnerUsername = '';
-        if(pl1.score !== pl2.score) {
-          winnerUsername = room.users.find(user => user.id === winner.userId).username;
-        }
-        this.server.to(data.roomId).emit('announceWinner', winner, winnerUsername);
-        room.remove();
+            const gameLength = room.gameLength;
+            if((room.gameLength > room.played + 1)) {
+              ++room.played
+              const played = room.played + 1;
+              await room.save();
+              this.server.to(data.roomId).emit('word', {...generatedWord, played, gameLength})
+              this.server.to(data.roomId).emit('score', {pl1, pl2})
+            } else {
+              const scores = room.scores;
+              const [pl1, pl2] =  scores;
+              const winner = pl1.score > pl2.score ? pl1 : pl1.score === pl2.score ? {userId: 'tie', score: pl2.score} : pl2;
+              let winnerUsername = '';
+              if(pl1.score !== pl2.score) {
+                winnerUsername = room.users.find(user => user.id === winner.userId).username;
+              }
+              this.server.to(data.roomId).emit('announceWinner', winner, winnerUsername);
+              try {
+                room.remove();
+              } catch(err) {
+                // Silently fail
+              }
+            }
+          } else if(data.word.trim().toLowerCase() !== room.currentWord.trim().toLowerCase()) {
+            if(data.round === room.played + 1) {
+              throw new WsException({message: INVALID_WORD, status: INVALID_WORD_CODE})
+            }
+            throw new WsException({message: BEATEN_TO_WORD, status: BEATEN_TO_WORD_CODE})
+          }
       }
 
     } catch(err) {
       const log = new Logger('SUBMIT WORD')
-      log.error(err);
       if(!err.error) {
+        log.error(err);
         throw new WsException({message: UNKNOWN_ERROR, status: UNKNOWN_ERROR_CODE});
       }
       throw new WsException(err.error)
@@ -302,8 +309,8 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       return true;
     } catch(err) {
       const log = new Logger('LEAVE ROOM')
-      log.error(err);
       if(!err.error) {
+        log.error(err);
         throw new WsException({message: UNKNOWN_ERROR, status: UNKNOWN_ERROR_CODE});
       }
       throw new WsException(err.error)
@@ -342,8 +349,8 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       return true;
     } catch(err) {
       const log = new Logger('LEAVE ROOM')
-      log.error(err);
       if(!err.error) {
+        log.error(err);
         throw new WsException({message: UNKNOWN_ERROR, status: UNKNOWN_ERROR_CODE});
       }
       throw new WsException(err.error)
@@ -352,8 +359,15 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
   @SubscribeMessage('fatalError') 
   async fatalErrorHandler(@MessageBody() data: {roomId: string, userId: string}) {
-    const room = await this.roomRepository.findOne(data.roomId);
-    this.roomRepository.delete(room.id);
+    try {
+      const room = await this.roomRepository.findOne(data.roomId);
+      if(room) {
+        this.roomRepository.delete(room.id);
+      }
+    } catch (err) {
+      const log = new Logger('Fatal Error')
+      log.error(err);
+    }
     this.server.in(data.roomId).clients((error, socketIds) => {
       this.server.to(data.roomId).emit('fatalError', {message: FATAL_ERROR, status: FATAL_ERROR_CODE});
       socketIds.forEach(socketId => this.server.sockets.sockets[socketId].leave(data.roomId));
